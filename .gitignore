@@ -1,0 +1,52 @@
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Node dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Databases & Vector Stores
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+chroma_db/
+backend/data/chroma_db/
+
+# Static files collected for production
+staticfiles/
+backend/staticfiles/
+
+# Local development scratch scripts
+scratch/
