@@ -1,6 +1,8 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.renderers import JSONRenderer
+from core.negotiation import IgnoreClientContentNegotiation
 from .services import WeatherService
 
 
@@ -11,6 +13,8 @@ class WeatherCurrentView(APIView):
     """
     authentication_classes = []
     permission_classes = []
+    renderer_classes = [JSONRenderer]
+    content_negotiation_class = IgnoreClientContentNegotiation
 
     def get(self, request):
         lat = request.query_params.get("latitude") or request.query_params.get("lat")

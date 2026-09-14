@@ -14,6 +14,12 @@ NOMINATIM_USER_AGENT = "CleanRouteAI/1.0 (cleanroute.project@gmail.com)"
 PHOTON_BASE_URL = "https://photon.komoot.io/api/"
 
 
+import time
+# In-memory cache for search suggestions: "query:limit" -> {"timestamp": float, "data": list}
+_suggestions_cache: Dict[str, Dict[str, Any]] = {}
+SUGGESTIONS_CACHE_TTL = 1800  # 30 minutes
+
+
 class GeocodingService:
     """
     Server-side geocoding and search-as-you-type suggestion service
@@ -30,9 +36,17 @@ class GeocodingService:
             return []
 
         clean_query = query.strip()
+        actual_limit = min(max(1, limit), 10)
+        cache_key = f"{clean_query.lower()}:{actual_limit}"
+        now = time.time()
+
+        cached = _suggestions_cache.get(cache_key)
+        if cached and (now - cached["timestamp"] < SUGGESTIONS_CACHE_TTL):
+            return cached["data"]
+
         params = {
             "q": clean_query,
-            "limit": min(max(1, limit), 10)
+            "limit": actual_limit
         }
         query_string = urllib.parse.urlencode(params)
         request_url = f"{PHOTON_BASE_URL}?{query_string}"
@@ -94,10 +108,13 @@ class GeocodingService:
                         "osm_value": props.get("osm_value", "")
                     })
 
+                _suggestions_cache[cache_key] = {"timestamp": now, "data": suggestions}
                 return suggestions
 
         except Exception as e:
             logger.error(f"Photon suggestion lookup failed for '{clean_query}': {str(e)}")
+            if cached:
+                return cached["data"]
             return []
 
     @staticmethod
@@ -108,15 +125,18 @@ class GeocodingService:
         query_normalized = location_name.strip()
 
         # 1. Check local database cache
-        cached = GeocodeCache.objects.filter(query__iexact=query_normalized).first()
-        if cached:
-            return {
-                "name": cached.name,
-                "latitude": cached.latitude,
-                "longitude": cached.longitude,
-                "display_name": cached.display_name,
-                "cached": True
-            }
+        try:
+            cached = GeocodeCache.objects.filter(query__iexact=query_normalized).first()
+            if cached:
+                return {
+                    "name": cached.name,
+                    "latitude": cached.latitude,
+                    "longitude": cached.longitude,
+                    "display_name": cached.display_name,
+                    "cached": True
+                }
+        except Exception as db_err:
+            logger.warning(f"GeocodeCache read unavailable: {db_err}")
 
         # 2. Try Nominatim API
         params = {
@@ -147,15 +167,18 @@ class GeocodingService:
                         display_name = primary_result.get("display_name", query_normalized)
 
                         # Save to local database cache
-                        GeocodeCache.objects.update_or_create(
-                            query=query_normalized,
-                            defaults={
-                                "name": query_normalized,
-                                "latitude": lat,
-                                "longitude": lon,
-                                "display_name": display_name
-                            }
-                        )
+                        try:
+                            GeocodeCache.objects.update_or_create(
+                                query=query_normalized,
+                                defaults={
+                                    "name": query_normalized,
+                                    "latitude": lat,
+                                    "longitude": lon,
+                                    "display_name": display_name
+                                }
+                            )
+                        except Exception as db_err:
+                            logger.warning(f"GeocodeCache write unavailable: {db_err}")
 
                         return {
                             "name": query_normalized,
@@ -172,15 +195,19 @@ class GeocodingService:
             suggestions = GeocodingService.get_suggestions(query_normalized, limit=1)
             if suggestions:
                 top = suggestions[0]
-                GeocodeCache.objects.update_or_create(
-                    query=query_normalized,
-                    defaults={
-                        "name": top["name"],
-                        "latitude": top["latitude"],
-                        "longitude": top["longitude"],
-                        "display_name": top["display_name"]
-                    }
-                )
+                try:
+                    GeocodeCache.objects.update_or_create(
+                        query=query_normalized,
+                        defaults={
+                            "name": top["name"],
+                            "latitude": top["latitude"],
+                            "longitude": top["longitude"],
+                            "display_name": top["display_name"]
+                        }
+                    )
+                except Exception as db_err:
+                    logger.warning(f"GeocodeCache write unavailable: {db_err}")
+
                 return {
                     "name": top["name"],
                     "latitude": top["latitude"],

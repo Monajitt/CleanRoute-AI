@@ -25,7 +25,8 @@ db.sqlite3
 *.sqlite3
 *.sqlite3-journal
 chroma_db/
-data/chroma_db/
+data/
+
 
 # Static files collected for production
 staticfiles/

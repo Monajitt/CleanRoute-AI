@@ -1,7 +1,12 @@
+import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.renderers import JSONRenderer
+from core.negotiation import IgnoreClientContentNegotiation
 from .services import GeocodingService
+
+logger = logging.getLogger(__name__)
 
 
 class GeocodeLocationView(APIView):
@@ -11,6 +16,8 @@ class GeocodeLocationView(APIView):
     """
     authentication_classes = []
     permission_classes = []
+    renderer_classes = [JSONRenderer]
+    content_negotiation_class = IgnoreClientContentNegotiation
 
     def post(self, request):
         location_name = request.data.get("location") or request.data.get("name")
@@ -25,7 +32,12 @@ class GeocodeLocationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        result = GeocodingService.geocode_location(str(location_name).strip())
+        try:
+            result = GeocodingService.geocode_location(str(location_name).strip())
+        except Exception as e:
+            logger.error(f"Geocoding error for '{location_name}': {e}")
+            result = None
+
         if not result:
             return Response(
                 {
@@ -53,6 +65,8 @@ class GeocodeSuggestionsView(APIView):
     """
     authentication_classes = []
     permission_classes = []
+    renderer_classes = [JSONRenderer]
+    content_negotiation_class = IgnoreClientContentNegotiation
 
     def get(self, request):
         query = request.query_params.get("q", "").strip()
@@ -71,7 +85,12 @@ class GeocodeSuggestionsView(APIView):
         except (ValueError, TypeError):
             limit = 5
 
-        suggestions = GeocodingService.get_suggestions(query, limit=limit)
+        try:
+            suggestions = GeocodingService.get_suggestions(query, limit=limit)
+        except Exception as e:
+            logger.error(f"Geocoding suggestions error for query '{query}': {e}")
+            suggestions = []
+
         return Response(
             {
                 "success": True,

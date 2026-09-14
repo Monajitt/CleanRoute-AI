@@ -93,3 +93,10 @@ class GeocodeSuggestionsAPITests(TestCase):
             self.assertIn("name", first)
             self.assertIn("latitude", first)
             self.assertIn("longitude", first)
+
+    def test_suggestions_with_browser_accept_header(self):
+        response = self.client.get(self.url, {"q": "Kolkata", "limit": 3}, HTTP_ACCEPT='text/html,application/xhtml+xml')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        self.assertTrue(response.data.get("success"))
+

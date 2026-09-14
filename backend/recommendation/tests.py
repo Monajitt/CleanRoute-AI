@@ -113,3 +113,29 @@ class RecommendationServiceTests(TestCase):
         # Test empty routes validation
         res_empty = self.client.post("/api/recommendation/score/", {"routes": []}, format="json")
         self.assertEqual(res_empty.status_code, 400)
+
+    def test_deterministic_tie_breaking_order(self):
+        # Two routes constructed to test tie-breaking
+        # When scores tie, lower pollution exposure must win over lower duration
+        routes = [
+            {
+                "id": 1,
+                "name": "Route Lower Pollution",
+                "distance_km": 10.0,
+                "duration_minutes": 20.0,
+                "air_quality": {"average_aqi": 30.0}
+            },
+            {
+                "id": 2,
+                "name": "Route Shorter Duration",
+                "distance_km": 10.0,
+                "duration_minutes": 20.0,
+                "air_quality": {"average_aqi": 60.0}
+            }
+        ]
+        # In balanced mode, normalized distance and duration are equal (100.0 each)
+        # Route 1 has lower pollution (30 < 60), so it must be ranked #1
+        ranked = RecommendationService.score_and_rank_routes(routes, preference="balanced")
+        self.assertEqual(ranked[0]["name"], "Route Lower Pollution")
+        self.assertEqual(ranked[0]["rank"], 1)
+        self.assertTrue(ranked[0]["is_recommended"])

@@ -154,15 +154,20 @@ class RouteSearchCreateView(APIView):
             location_label=f"Weather near destination ({dest_name})"
         )
 
-        # 7. Persist inquiry to PostgreSQL
-        search_record = serializer.save()
+        # 7. Persist inquiry to PostgreSQL (fault-tolerant)
+        search_id = None
+        try:
+            search_record = serializer.save()
+            search_id = search_record.id
+        except Exception as db_err:
+            logger.warning(f"Failed to persist route search to database: {db_err}")
 
         # 8. Return unified real-data response
         return Response(
             {
                 "success": True,
                 "data": {
-                    "search_id": search_record.id,
+                    "search_id": search_id,
                     "origin_name": origin_name,
                     "destination_name": dest_name,
                     "origin": {

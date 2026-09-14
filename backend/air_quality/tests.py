@@ -28,6 +28,9 @@ class AirQualityCategoryTests(TestCase):
 
 
 class AirQualityServiceTests(TestCase):
+    def setUp(self):
+        AirQualityService.clear_cache()
+
     def test_sample_route_air_quality_empty_coords(self):
         res = AirQualityService.sample_route_air_quality([])
         self.assertIn("average_aqi", res)

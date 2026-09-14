@@ -137,10 +137,11 @@ class RecommendationService:
             r_copy["overall_score"] = bounded_score
             scored_routes.append(r_copy)
 
-        # Deterministic sort: highest score, lowest duration, lowest distance, id
+        # Deterministic sort: 1. highest score, 2. lowest pollution exposure, 3. lowest duration, 4. lowest distance, id
         scored_routes.sort(
             key=lambda x: (
                 -x["scores"]["final_score"],
+                float((x.get("air_quality") or {}).get("average_aqi") or x.get("aqi") or 50.0),
                 float(x.get("duration_minutes") or 0.0),
                 float(x.get("distance_km") or 0.0),
                 x.get("id", 0)

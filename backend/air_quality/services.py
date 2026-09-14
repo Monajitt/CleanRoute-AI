@@ -39,6 +39,12 @@ def get_exposure_level(aqi: float) -> str:
     return "High estimated pollution exposure"
 
 
+import time
+# Server-side in-memory cache for air quality: "lat,lon" -> {"timestamp": float, "data": dict}
+_aqi_cache: Dict[str, Dict[str, Any]] = {}
+AQI_CACHE_TTL_SECONDS = 900  # 15 minutes
+
+
 class AirQualityService:
     """
     Fetches live atmospheric criteria air pollutants (PM2.5, PM10, NO2, O3, US AQI)
@@ -46,17 +52,29 @@ class AirQualityService:
     pollution exposure estimation.
     """
 
+    @classmethod
+    def clear_cache(cls):
+        global _aqi_cache
+        _aqi_cache.clear()
+
     @staticmethod
     def get_air_quality(latitude: float, longitude: float) -> Optional[Dict[str, Any]]:
         """
-        Fetches current air quality metrics for a single coordinate point.
+        Fetches current air quality metrics for a single coordinate point with server-side caching.
         """
         try:
-            lat = round(float(latitude), 4)
-            lon = round(float(longitude), 4)
+            lat = round(float(latitude), 2)
+            lon = round(float(longitude), 2)
         except (ValueError, TypeError):
             logger.warning(f"Invalid coordinates passed to get_air_quality: lat={latitude}, lon={longitude}")
             return None
+
+        cache_key = f"{lat:.2f},{lon:.2f}"
+        now = time.time()
+
+        cached_entry = _aqi_cache.get(cache_key)
+        if cached_entry and (now - cached_entry["timestamp"] < AQI_CACHE_TTL_SECONDS):
+            return dict(cached_entry["data"])
 
         url = (
             f"{OPEN_METEO_AIR_QUALITY_URL}"
@@ -72,6 +90,8 @@ class AirQualityService:
             with urllib.request.urlopen(req, timeout=10) as response:
                 if response.status != 200:
                     logger.error(f"Open-Meteo Air Quality returned HTTP {response.status}")
+                    if cached_entry:
+                        return dict(cached_entry["data"])
                     return None
                 data = json.loads(response.read().decode("utf-8"))
 
@@ -82,7 +102,7 @@ class AirQualityService:
                 pm25 = current.get("pm2_5", 25.0)
                 aqi = round(min(500.0, pm25 * 2.1), 1)
 
-            return {
+            result = {
                 "latitude": lat,
                 "longitude": lon,
                 "aqi": round(float(aqi), 1),
@@ -94,8 +114,12 @@ class AirQualityService:
                 "estimated_pollution_exposure": get_exposure_level(float(aqi)),
                 "source": "Open-Meteo Air Quality"
             }
+            _aqi_cache[cache_key] = {"timestamp": now, "data": result}
+            return result
         except Exception as err:
             logger.warning(f"Air quality fetch error at [{lat}, {lon}]: {err}")
+            if cached_entry:
+                return dict(cached_entry["data"])
             return {
                 "latitude": lat,
                 "longitude": lon,
