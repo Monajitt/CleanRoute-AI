@@ -11,7 +11,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: "./build.sh"
-    startCommand: "gunicorn config.wsgi:application"
+    startCommand: "gunicorn --config gunicorn.conf.py config.wsgi:application"
     plan: free
     envVars:
       - key: PYTHON_VERSION

@@ -6,7 +6,7 @@
 [![Django](https://img.shields.io/badge/Django-5.1%2B-092E20.svg)](https://www.djangoproject.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-336791.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-55%20Passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-59%20Passing-brightgreen.svg)]()
 [![Responsible AI](https://img.shields.io/badge/Responsible%20AI-Compliant-success.svg)]()
 
 ---
@@ -15,18 +15,18 @@
 
 Urban air pollution is one of the leading environmental health risks worldwide, contributing to millions of premature cardiopulmonary deaths and exacerbating respiratory ailments like asthma and COPD. Traditional navigation applications (such as Google Maps or Apple Maps) optimize travel almost exclusively for transit time and distance. As a result, pedestrians, cyclists, and commuters are routinely routed along congested arterial highways, vehicle choke points, and high-emission corridors.
 
-**CleanRoute AI** redefines urban navigation by making atmospheric health and sustainable mobility active decision variables in journey planning. By combining real road routing from **OpenRouteService**, real-time atmospheric criteria pollutant tracking from **Open-Meteo**, a transparent **deterministic multi-criteria recommendation engine**, and a grounded **Local RAG conversational assistant**, CleanRoute AI empowers commuters to choose healthier, low-emission travel corridors.
+**CleanRoute AI** redefines urban navigation by making atmospheric health and sustainable mobility active decision variables in journey planning. By combining real road routing from **OpenRouteService**, atmospheric criteria pollutant estimates from **Open-Meteo**, a transparent **deterministic multi-criteria recommendation engine**, and a grounded **Local RAG conversational assistant**, CleanRoute AI empowers commuters to choose healthier, low-emission travel corridors.
 
 ---
 
 ## 2. Key Features
 
-- 🔍 **Search-As-You-Type Geocoding**: Real-time autocomplete suggestions powered by the Photon Komoot API with zero hardcoded assumptions.
+- 🔍 **Search-As-You-Type Geocoding**: Autocomplete suggestions powered by the Photon Komoot API with zero hardcoded assumptions.
 - 🗺️ **Multi-Modal Road Routing**: Navigable route generation via OpenRouteService Directions API across **Walking**, **Cycling**, and **Driving**.
-- 🍃 **Live Air Quality & Weather Tracking**: Integration with Open-Meteo APIs for live criteria pollutants ($PM_{2.5}, PM_{10}, NO_2, O_3, SO_2, CO$, European AQI, and US AQI) and atmospheric weather.
+- 🍃 **Atmospheric Air Quality & Weather Tracking**: Integration with Open-Meteo APIs for criteria pollutant estimates ($PM_{2.5}, PM_{10}, NO_2, O_3, SO_2, CO$, European AQI, and US AQI) and atmospheric weather conditions.
 - 📊 **Multi-Route Comparison**: Retrieves and renders up to 3 viable route alternatives with distinctive color-coded polylines and interactive Leaflet map layers.
 - ⚖️ **Deterministic Recommendation Engine**: Min-max normalized, mathematically weighted route ranking across user-selected priorities: **Health First** (60/20/20), **Balanced** (40/30/30), and **Time First** (20/60/20).
-- 🤖 **Grounded AI Assistant (Local RAG)**: Context-aware conversational assistant backed by a local ChromaDB vector knowledge base covering WHO air quality standards and sustainable transit guidelines.
+- 🤖 **Grounded AI Assistant (Local RAG)**: Context-aware conversational assistant backed by an in-process, deterministic local vector store (TF-IDF + Cosine Similarity) indexing WHO air quality guidelines and sustainable transit guidelines with < 2 MB RAM overhead.
 - 🛡️ **Responsible AI & Ethics Guardrails**: Fully explainable scoring, multi-modal inclusivity, zero user location tracking, and an explicit, permanent non-medical advisory disclaimer.
 - 🚀 **Production-Ready Architecture**: Configured with WhiteNoise, Gunicorn, PostgreSQL connection pooling, and Render Blueprint deployment (`render.yaml`).
 
@@ -68,7 +68,7 @@ graph TD
     
     User -->|10. Ask questions| Frontend
     Frontend -->|11. POST /api/chat/| RAGApp
-    RAGApp --> ChromaDB[(ChromaDB Vector Store)]
+    RAGApp --> VectorStore[(Local Vector Store)]
     RAGApp -->|12. Grounded answer + citations + disclaimer| Frontend
 ```
 
@@ -82,8 +82,8 @@ graph TD
 | **Backend** | Python 3.11+, Django 5.1+, Django REST Framework 3.15+, django-cors-headers, WhiteNoise |
 | **Database** | PostgreSQL 15+ (psycopg 3 binary driver, dj-database-url) |
 | **APIs & Data** | Photon Komoot (Geocoding), OpenRouteService (Routing), Open-Meteo (Weather & Air Quality) |
-| **Vector AI & RAG** | ChromaDB, Local Document Embeddings, Grounded Response Synthesizer |
-| **Production Server** | Gunicorn WSGI Server, Render Cloud Platform (`render.yaml`) |
+| **Vector AI & RAG** | In-Process Deterministic Vector Store (TF-IDF + Cosine Similarity), Local Embeddings, Grounded Response Synthesizer |
+| **Production Server** | Gunicorn WSGI Server (1 worker, 2 threads, 120s timeout), Render Cloud Platform (`render.yaml`) |
 
 ---
 
@@ -91,7 +91,7 @@ graph TD
 
 1. **Walking** (`walking` / `foot-walking`): Prioritizes pedestrian corridors, walkways, and park paths away from heavy vehicle traffic.
 2. **Cycling** (`cycling` / `cycling-regular`): Optimizes for bicycle lanes, designated cycle tracks, and lower-stress secondary streets.
-3. **Driving** (`driving` / `driving-car`): Navigable road network for vehicular transit with real-time exposure trade-offs.
+3. **Driving** (`driving` / `driving-car`): Navigable road network for vehicular transit with exposure trade-offs.
 
 ---
 
@@ -126,20 +126,21 @@ $$N(x_i) = 100.0 \times \frac{\max(X) - x_i}{\max(X) - \min(X)}$$
     - `Elevated estimated pollution exposure` (AQI $101 - 150$)
     - `High estimated pollution exposure` (AQI $> 150$)
 - **Weather Provider**: Open-Meteo Weather API (`https://api.open-meteo.com/v1/forecast`).
-  - Measures: Real-time temperature, WMO weather condition code and text description, relative humidity, wind speed, and precipitation.
+  - Measures: Current temperature, WMO weather condition code and text description, relative humidity, wind speed, and precipitation.
 
 ---
 
 ## 8. Grounded AI Assistant (Local RAG)
 
-CleanRoute AI features a Local Retrieval-Augmented Generation (RAG) assistant that answers commuter inquiries without requiring external paid cloud APIs or subscription keys:
-- **Vector Database**: ChromaDB vector store initialized with curated documents:
+CleanRoute AI features a Local Retrieval-Augmented Generation (RAG) assistant that answers commuter inquiries without requiring external paid cloud APIs, heavy neural models, or subscription keys:
+- **Vector Store**: In-process deterministic vector store initialized from tracked Markdown documents in `backend/knowledge_base/`:
   - WHO Global Air Quality Guidelines (2021)
   - Air Quality Index (AQI) thresholds and health classifications
   - CleanRoute AI deterministic scoring formulas and architecture
   - Sustainable urban mobility and active transport benefits
 - **Grounded Verification**: Answers are synthesized exclusively from retrieved knowledge chunks and active route journey context.
 - **Source Transparency**: Every response cites the specific knowledge documents used.
+- **Memory Optimized**: Uses < 2 MB RAM, eliminating worker timeouts and OOM errors on constrained environments (such as Render Free 512 MB RAM).
 
 ---
 
@@ -164,9 +165,10 @@ CleanRoute AI features a Local Retrieval-Augmented Generation (RAG) assistant th
 
 ### Step 1: Clone Repository
 ```bash
-git clone <repository-url>
-cd cleanroot
+git clone https://github.com/Monajitt/CleanRoute-AI.git
+cd CleanRoute-AI
 ```
+*(If you cloned into or renamed the local directory to `cleanroot`, run `cd cleanroot` instead).*
 
 ### Step 2: Set Up Python Virtual Environment
 **On Windows (PowerShell):**
@@ -187,11 +189,17 @@ pip install -r backend/requirements.txt
 ```
 
 ### Step 4: Configure Environment Variables
-Copy `backend/.env.example` to `backend/.env`:
+**On Windows (PowerShell):**
+```powershell
+Copy-Item backend\.env.example backend\.env
+```
+
+**On Linux / macOS (Bash):**
 ```bash
 cp backend/.env.example backend/.env
 ```
-Fill in your database credentials and API key:
+
+Fill in your database credentials and API key in `backend/.env`:
 ```env
 DEBUG=True
 SECRET_KEY=django-insecure-cleanroute-ai-dev-secret-key-2026
@@ -209,12 +217,13 @@ Ensure your PostgreSQL server has the `cleanroute_db` database created:
 ```sql
 CREATE DATABASE cleanroute_db;
 ```
-Run Django migrations and build the local RAG knowledge base:
+Run Django migrations and build the local in-process RAG knowledge base:
 ```bash
 cd backend
 python manage.py migrate
-python manage.py init_rag
+python manage.py ingest_knowledge
 ```
+*(Note: `python manage.py init_rag` is also supported as an alias).*
 
 ---
 
@@ -240,12 +249,12 @@ python -m http.server 5500 --directory frontend
 
 CleanRoute AI includes a comprehensive test suite with 100% pass rates across all layers.
 
-### 1. Django App Unit Tests (55 Tests)
+### 1. Django App Unit Tests (59 Tests)
 ```bash
 cd backend
 python manage.py test
 ```
-*Output: `Ran 55 tests ... OK`*
+*Output: `Ran 59 tests ... OK`*
 
 ### 2. Real-World Corridor Matrix Tests
 Tests multi-city corridors (Delhi, Kolkata, Kalyani, Mumbai), travel modes (Walking, Cycling, Driving), priority sensitivity, and long-distance bypass:
@@ -268,16 +277,17 @@ python scratch/test_edge_cases.py
 CleanRoute AI is packaged for zero-friction cloud deployment on [Render](https://render.com) using Infrastructure-as-Code (`render.yaml`).
 
 ### Deployment Files:
-- **`render.yaml`**: Declares the managed PostgreSQL database and the Gunicorn Python web service.
-- **`backend/build.sh`**: Installs production dependencies, executes `collectstatic`, and runs database migrations.
-- **`backend/requirements.txt`**: Includes `gunicorn`, `whitenoise`, and `dj-database-url`.
-- **`backend/config/settings.py`**: Configured with WhiteNoise compressed static storage and database URL parsing.
+- **`render.yaml`**: Declares the managed PostgreSQL database (`cleanroute-db`), Python REST backend (`cleanroute-backend`), and static frontend service (`cleanroute-frontend`).
+- **`backend/build.sh`**: Installs production dependencies, executes `collectstatic`, runs database migrations, and deterministically indexes the RAG knowledge base.
+- **`backend/gunicorn.conf.py`**: Conservative Gunicorn configuration (1 worker, 2 threads, 120s timeout) memory-optimized to operate safely within Render Free's 512 MB RAM limit.
+- **`backend/requirements.txt`**: Includes `Django`, `djangorestframework`, `psycopg[binary]`, `whitenoise`, `gunicorn`, and `dj-database-url`.
+- **`backend/config/settings.py`**: Configured with WhiteNoise non-strict static storage, global `IgnoreClientContentNegotiation`, and database URL parsing.
 
 ### Deploying to Render:
-1. Push repository to GitHub/GitLab.
+1. Push repository to GitHub.
 2. In Render, select **New** → **Blueprint** and connect the repository.
 3. Configure `OPENROUTESERVICE_API_KEY` under Environment Variables.
-4. Render automatically provisions the database, executes `build.sh`, and launches Gunicorn.
+4. Render automatically provisions the database, executes `build.sh`, and launches the backend service via `gunicorn --config gunicorn.conf.py config.wsgi:application`.
 
 ---
 

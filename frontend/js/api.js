@@ -884,9 +884,12 @@ const CleanRouteAPI = (() => {
       };
     });
 
-    // Deterministic sort: highest score, lowest duration, lowest distance
+    // Deterministic sort: 1. highest score, 2. lowest pollution exposure, 3. lowest duration, 4. lowest distance
     scored.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
+      const aPoll = Number((a.air_quality && a.air_quality.average_aqi != null) ? a.air_quality.average_aqi : (a.aqi || 50));
+      const bPoll = Number((b.air_quality && b.air_quality.average_aqi != null) ? b.air_quality.average_aqi : (b.aqi || 50));
+      if (aPoll !== bPoll) return aPoll - bPoll;
       if (a.durationMin !== b.durationMin) return a.durationMin - b.durationMin;
       return a.distanceKm - b.distanceKm;
     });

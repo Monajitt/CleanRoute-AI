@@ -23,8 +23,8 @@ const CleanRouteMap = (() => {
   const envCache = new Map(); // Grid cache keyed by "lat.toFixed(2),lon.toFixed(2)"
   let hoverTimer = null;
   let lastRequestTime = 0;
-  const THROTTLE_INTERVAL_MS = 1000; // Throttle: at most 1 network call per second
-  const DEBOUNCE_DELAY_MS = 300;     // Debounce: 300ms pause before requesting new grid cell
+  const THROTTLE_INTERVAL_MS = 2500; // Throttle: at most 1 network call per 2.5 seconds
+  const DEBOUNCE_DELAY_MS = 600;     // Debounce: 600ms steady hover before requesting new grid cell
 
   // US EPA AQI Visual Brackets
   function getAqiVisualMeta(aqi) {
